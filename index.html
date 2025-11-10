@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>곰팡이 숲 360도 로드뷰</title>
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css"/>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js"></script>
+    
+    <style>
+        /* 기본 레이아웃 */
+        html, body { 
+            margin: 0; 
+            padding: 0; 
+            height: 100%; 
+            overflow: hidden; 
+            background-color: #000; 
+        }
+        
+        /* 로드뷰 영역 (초기에는 숨겨짐) */
+        #roadview { 
+            width: 100%; 
+            height: 100%; 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            display: none; 
+            z-index: 3;
+        }
+        
+        /* Pannellum 기본 컨트롤들을 CSS로 숨김 처리 */
+        .pnlm-controls-container {
+            display: none !important;
+        }
+
+        /* 배경 영상 스타일 */
+        #background-video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover; /* 화면 전체를 덮도록 설정 */
+            z-index: 1; 
+        }
+
+        /* 시작 화면 스타일 (이미지 중앙 정렬) */
+        #intro-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            /* ★★★ 어둡게 하는 오버레이 제거 (transparent로 변경) ★★★ */
+            background-color: transparent; 
+            
+            color: rgb(255, 0, 0); 
+            display: flex;
+            flex-direction: column;
+            justify-content: center; /* 수직 중앙 정렬 */
+            align-items: center;    /* 수평 중앙 정렬 */
+            z-index: 2; /* 영상 위에 위치 */
+            font-family: sans-serif;
+            text-align: center;
+        }
+
+        /* 시작 이미지 스타일 */
+        #start-image {
+            --start-image-size: 150px; 
+            
+            width: var(--start-image-size);
+            height: var(--start-image-size);
+            
+            cursor: pointer; 
+            /* 필터 전환 시간을 0.05s로 설정하여 빠르게 변경 */
+            transition: filter 0.05s ease, transform 0.2s ease;
+            filter: invert(0); 
+        }
+
+        /* 마우스 호버 시 색반전 효과 */
+        #start-image:hover {
+            filter: invert(100%); 
+            transform: scale(1.05); 
+        }
+    </style>
+</head>
+<body>
+
+    <audio id="bgmPlayer" loop hidden></audio> 
+    
+    <video id="background-video" loop autoplay muted playsinline></video>
+    
+    <div id="intro-screen">
+        <img id="start-image" alt="시작 이미지" src=""/>
+    </div>
+
+    <div id="roadview"></div>
+
+    <script>
+        // =======================================================================
+        // Pannellum 및 BGM 설정
+        const ROADVIEW_IMAGE_URL = 'https://raw.githubusercontent.com/yoonj1yae/gompangii/main/abcd.png'; 
+        const BGM_URL = 'https://raw.githubusercontent.com/yoonj1yae/gompangii/main/gompangii_bgm.mp3'; 
+        
+        // 여기에 시작 버튼으로 사용할 이미지의 GitHub RAW URL을 넣어주세요!
+        const START_IMAGE_URL = 'https://raw.githubusercontent.com/yoonj1yae/gompangii/main/start_button.png'; 
+        
+        // 여기에 배경 영상의 GitHub RAW URL을 넣어주세요!
+        const BACKGROUND_VIDEO_URL = 'https://raw.githubusercontent.com/yoonj1yae/gompangii/main/background.mp4'; 
+        // =======================================================================
+        
+        // 이미지 크기 조정 변수
+        const IMAGE_SIZE = '180px'; 
+        // =======================================================================
+
+        let pannellumViewer = null;
+
+
+        // --- Pannellum 및 BGM 로직 시작 ---
+        document.addEventListener('DOMContentLoaded', function() {
+            const introScreen = document.getElementById('intro-screen');
+            const startImage = document.getElementById('start-image'); 
+            const roadviewDiv = document.getElementById('roadview');
+            const player = document.getElementById('bgmPlayer');
+            const videoElement = document.getElementById('background-video');
+
+            // 1. 배경 영상 src 설정
+            videoElement.src = BACKGROUND_VIDEO_URL;
+
+            // 2. 시작 이미지 src 설정 및 크기 설정
+            startImage.src = START_IMAGE_URL;
+            document.documentElement.style.setProperty('--start-image-size', IMAGE_SIZE);
+
+
+            // 3. 이미지 클릭 이벤트 리스너 연결
+            startImage.addEventListener('click', function() {
+                // 1. 배경 영상 중지 및 숨김
+                videoElement.pause();
+                videoElement.style.display = 'none';
+                
+                // 2. 인트로 화면 숨기기 (이미지 레이어)
+                introScreen.style.display = 'none';
+                
+                // 3. 로드뷰 DIV 보이기
+                roadviewDiv.style.display = 'block';
+
+                // 4. Pannellum 뷰어 초기화 (한 번만 실행)
+                if (!pannellumViewer) {
+                    pannellumViewer = pannellum.viewer('roadview', {
+                        "type": "equirectangular",
+                        "panorama": ROADVIEW_IMAGE_URL, 
+                        "autoLoad": true,
+                        "autoRotate": -2,
+                        "compass": false, 
+                        "controls": false, 
+                        "mouseZoom": true, 
+                        "touchZoom": false, 
+                        "hfov": 120, 
+                        "minHfov": 70, 
+                        "maxHfov": 140
+                    });
+                } else {
+                    pannellumViewer.resize();
+                }
+
+                // 5. BGM 재생 
+                player.src = BGM_URL;
+                player.volume = 0.5;
+                player.muted = false; 
+                player.play().catch(error => {
+                    console.error('BGM 재생 실패:', error);
+                });
+            });
+        });
+    </script>
+</body>
+</html>
